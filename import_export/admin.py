@@ -305,7 +305,8 @@ class ImportMixin(ImportExportMixinBase):
 
             # prepare additional kwargs for import_data, if needed
             imp_kwargs = self.get_import_data_kwargs(request, form=form, *args, **kwargs)
-            result = resource.import_data(dataset, dry_run=True,
+            dry_run = not request.POST.get('confirm')
+            result = resource.import_data(dataset, dry_run=dry_run,
                                           raise_errors=False,
                                           file_name=import_file.name,
                                           user=request.user,
