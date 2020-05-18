@@ -255,7 +255,7 @@ class ImportMixin(ImportExportMixinBase):
         for chunk in import_file.chunks():
             data += chunk
 
-        tmp_storage.save(data, input_format.get_read_mode())
+        tmp_storage.save(data)
         return tmp_storage
 
     def import_action(self, request, *args, **kwargs):
