@@ -313,7 +313,7 @@ class Resource(metaclass=DeclarativeMetaclass):
         objects are not created in bulk!
         """
         self.before_save_instance(instance, using_transactions, dry_run)
-        if not using_transactions and dry_run:
+        if dry_run:
             # we don't have transactions and we want to do a dry_run
             pass
         else:

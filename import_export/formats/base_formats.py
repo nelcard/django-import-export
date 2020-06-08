@@ -209,6 +209,9 @@ class XLSX(TablibFormat):
 
         for row in rows:
             row_values = [cell.value for cell in row]
+            # not real empty rows
+            if all([x is None for x in row_values]):
+                break
             dataset.append(row_values)
         return dataset
 
