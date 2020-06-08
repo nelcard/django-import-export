@@ -266,7 +266,7 @@ class ImportMixin(ImportExportMixinBase):
         'process_import' for the actual import.
         """
         if not self.has_import_permission(request):
-            raise PermissionDenied
+            return HttpResponseForbidden()
 
         context = self.get_import_context_data()
 
