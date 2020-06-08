@@ -9,7 +9,7 @@ from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
 from django.contrib.auth import get_permission_codename
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, HttpResponseForbidden
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -469,7 +469,7 @@ class ExportMixin(ImportExportMixinBase):
 
     def export_action(self, request, *args, **kwargs):
         if not self.has_export_permission(request):
-            raise PermissionDenied
+            return HttpResponseForbidden()
 
         formats = self.get_export_formats()
         form = ExportForm(formats, request.POST or None)
