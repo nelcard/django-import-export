@@ -35,6 +35,8 @@ if django.VERSION[0] >= 3:
 else:
     from django.db.models.fields import FieldDoesNotExist
 
+from django.db import models
+
 
 logger = logging.getLogger(__name__)
 # Set default logging handler to avoid "No handler found" warnings.
@@ -305,6 +307,9 @@ class Resource(metaclass=DeclarativeMetaclass):
         if errors:
             raise ValidationError(errors)
 
+    def execute_save_instance(self, instance) -> None:
+        instance.save()
+
     def save_instance(self, instance, using_transactions=True, dry_run=False):
         """
         Takes care of saving the object to the database.
@@ -317,7 +322,7 @@ class Resource(metaclass=DeclarativeMetaclass):
             # we don't have transactions and we want to do a dry_run
             pass
         else:
-            instance.save()
+            self.execute_save_instance(instance)
         self.after_save_instance(instance, using_transactions, dry_run)
 
     def before_save_instance(self, instance, using_transactions, dry_run):
@@ -884,7 +889,7 @@ class ModelResource(Resource, metaclass=ModelDeclarativeMetaclass):
         return {}
 
     @classmethod
-    def field_from_django_field(cls, field_name, django_field, readonly):
+    def field_from_django_field(cls, field_name, django_field: models.Field, readonly):
         """
         Returns a Resource Field instance for the given Django model field.
         """
@@ -892,7 +897,7 @@ class ModelResource(Resource, metaclass=ModelDeclarativeMetaclass):
         FieldWidget = cls.widget_from_django_field(django_field)
         widget_kwargs = cls.widget_kwargs_for_field(field_name)
         field = cls.DEFAULT_RESOURCE_FIELD(
-            attribute=field_name,
+            attribute=django_field.attname,
             column_name=field_name,
             widget=FieldWidget(**widget_kwargs),
             readonly=readonly,
