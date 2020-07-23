@@ -135,6 +135,10 @@ class DateWidget(Widget):
     def clean(self, value, row=None, *args, **kwargs):
         if not value:
             return None
+
+        if isinstance(value, datetime):
+            return value.date()
+
         if isinstance(value, date):
             return value
         for format in self.formats:
