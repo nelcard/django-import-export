@@ -259,6 +259,52 @@ class ImportMixin(ImportExportMixinBase):
         tmp_storage.save(data)
         return tmp_storage
 
+    def _run_import_action(self, request, context, form, input_format, *args, **kwargs):
+
+        import_file = form.cleaned_data['import_file']
+        # first always write the uploaded file to disk as it may be a
+        # memory file or else based on settings upload handlers
+        tmp_storage = self.write_to_tmp_storage(import_file, input_format)
+
+        # then read the file, using the proper format-specific mode
+        # warning, big files may exceed memory
+        # try:
+        data = tmp_storage.read(input_format.get_read_mode())
+        if not input_format.is_binary() and self.from_encoding:
+            data = force_text(data, self.from_encoding)
+        dataset = input_format.create_dataset(data)
+        # except UnicodeDecodeError as e:
+        #     return HttpResponse(_(u"<h1>Imported file has a wrong encoding: %s</h1>" % e))
+        # except Exception as e:
+        #     return HttpResponse(_(u"<h1>%s encountered while trying to read file: %s</h1>" % (type(e).__name__, import_file.name)))
+
+        # prepare kwargs for import data, if needed
+        res_kwargs = self.get_import_resource_kwargs(request, form=form, *args, **kwargs)
+        resource = self.get_import_resource_class()(**res_kwargs)
+
+        # prepare additional kwargs for import_data, if needed
+        imp_kwargs = self.get_import_data_kwargs(request, form=form, *args, **kwargs)
+        dry_run = not request.POST.get('confirm')
+        result = resource.import_data(dataset, dry_run=dry_run,
+                                      raise_errors=False,
+                                      file_name=import_file.name,
+                                      user=request.user,
+                                      **imp_kwargs)
+
+        context['result'] = result
+
+        if not result.has_errors() and not result.has_validation_errors():
+            initial = {
+                'import_file_name': tmp_storage.name,
+                'original_file_name': import_file.name,
+                'input_format': form.cleaned_data['input_format'],
+            }
+            confirm_form = self.get_confirm_import_form()
+            initial = self.get_form_kwargs(form=form, **initial)
+            context['confirm_form'] = confirm_form(initial=initial)
+
+        return TemplateResponse(request, [self.import_template_name], context)
+
     def import_action(self, request, *args, **kwargs):
         """
         Perform a dry_run of the import to make sure the import will not
@@ -279,65 +325,28 @@ class ImportMixin(ImportExportMixinBase):
                          request.FILES or None,
                          **form_kwargs)
 
-        if request.POST and form.is_valid():
-            input_format = import_formats[
-                int(form.cleaned_data['input_format'])
-            ]()
-            import_file = form.cleaned_data['import_file']
-            # first always write the uploaded file to disk as it may be a
-            # memory file or else based on settings upload handlers
-            tmp_storage = self.write_to_tmp_storage(import_file, input_format)
-
-            # then read the file, using the proper format-specific mode
-            # warning, big files may exceed memory
-            try:
-                data = tmp_storage.read(input_format.get_read_mode())
-                if not input_format.is_binary() and self.from_encoding:
-                    data = force_text(data, self.from_encoding)
-                dataset = input_format.create_dataset(data)
-            except UnicodeDecodeError as e:
-                return HttpResponse(_(u"<h1>Imported file has a wrong encoding: %s</h1>" % e))
-            except Exception as e:
-                return HttpResponse(_(u"<h1>%s encountered while trying to read file: %s</h1>" % (type(e).__name__, import_file.name)))
-
-            # prepare kwargs for import data, if needed
-            res_kwargs = self.get_import_resource_kwargs(request, form=form, *args, **kwargs)
-            resource = self.get_import_resource_class()(**res_kwargs)
-
-            # prepare additional kwargs for import_data, if needed
-            imp_kwargs = self.get_import_data_kwargs(request, form=form, *args, **kwargs)
-            dry_run = not request.POST.get('confirm')
-            result = resource.import_data(dataset, dry_run=dry_run,
-                                          raise_errors=False,
-                                          file_name=import_file.name,
-                                          user=request.user,
-                                          **imp_kwargs)
-
-            context['result'] = result
-
-            if not result.has_errors() and not result.has_validation_errors():
-                initial = {
-                    'import_file_name': tmp_storage.name,
-                    'original_file_name': import_file.name,
-                    'input_format': form.cleaned_data['input_format'],
-                }
-                confirm_form = self.get_confirm_import_form()
-                initial = self.get_form_kwargs(form=form, **initial)
-                context['confirm_form'] = confirm_form(initial=initial)
-        else:
-            res_kwargs = self.get_import_resource_kwargs(request, form=form, *args, **kwargs)
-            resource = self.get_import_resource_class()(**res_kwargs)
-
         context.update(self.admin_site.each_context(request))
 
         context['title'] = _("Import")
         context['form'] = form
         context['opts'] = self.model._meta
+        request.current_app = self.admin_site.name
+
+        if request.POST and form.is_valid():
+            input_format = self.get_import_formats()[
+                int(form.cleaned_data['input_format'])
+            ]()
+
+            try:
+                return self._run_import_action(request, context, form, input_format, *args, **kwargs)
+            except forms.ValidationError as e:
+                messages.error(request, str(e))
+
+        res_kwargs = self.get_import_resource_kwargs(request, form=form, *args, **kwargs)
+        resource = self.get_import_resource_class()(**res_kwargs)
         context['fields'] = [f.column_name for f in resource.get_user_visible_fields()]
 
-        request.current_app = self.admin_site.name
-        return TemplateResponse(request, [self.import_template_name],
-                                context)
+        return TemplateResponse(request, [self.import_template_name], context)
 
     def changelist_view(self, request, extra_context=None):
         if extra_context is None:

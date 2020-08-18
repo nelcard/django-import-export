@@ -19,8 +19,8 @@ class ImportForm(forms.Form):
         choices = []
         for i, f in enumerate(import_formats):
             choices.append((str(i), f().get_title(),))
-        if len(import_formats) > 1:
-            choices.insert(0, ('', '---'))
+        # if len(import_formats) > 1:
+        #     choices.insert(0, ('', '---'))
 
         self.fields['input_format'].choices = choices
 
