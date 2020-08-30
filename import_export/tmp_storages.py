@@ -26,9 +26,9 @@ class TempFolderStorage(BaseStorage):
 
     def open(self, mode='r'):
         if self.name:
-            return open(self.get_full_path(), mode)
+            return open(self.get_full_path(), mode, encoding='utf-8')
         else:
-            tmp_file = tempfile.NamedTemporaryFile(delete=False)
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, encoding='utf-8')
             self.name = tmp_file.name
             return tmp_file
 
