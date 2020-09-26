@@ -1,6 +1,6 @@
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.fields import NOT_PROVIDED
-from django.db.models.manager import Manager
+from django.db.models.manager import BaseManager
 
 from . import widgets
 
@@ -94,7 +94,7 @@ class Field:
 
         # RelatedManager and ManyRelatedManager classes are callable in
         # Django >= 1.7 but we don't want to call them
-        if callable(value) and not isinstance(value, Manager):
+        if callable(value) and not isinstance(value, BaseManager):
             value = value()
         return value
 
