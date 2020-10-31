@@ -105,3 +105,6 @@ msgstr "Borrar"
 #: templates/admin/import_export/import.html:103
 msgid "Update"
 msgstr "Actualizar"
+
+msgid "This is not a xlsx file"
+msgstr "Este no es un archivo xlsx"

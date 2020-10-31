@@ -1,6 +1,9 @@
 import tablib
 import warnings
 from importlib import import_module
+from zipfile import BadZipFile
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 try:
     from tablib.compat import xlrd
@@ -198,14 +201,19 @@ class XLSX(TablibFormat):
         """
         assert XLSX_IMPORT
         from io import BytesIO
-        xlsx_book = openpyxl.load_workbook(BytesIO(in_stream), read_only=True)
+        try:
+            xlsx_book = openpyxl.load_workbook(BytesIO(in_stream), read_only=True)
+        except BadZipFile:
+            raise ValidationError(_('This is not a xlsx file'))
 
         dataset = tablib.Dataset()
         sheet = xlsx_book.active
 
         # obtain generator
         rows = sheet.rows
-        dataset.headers = [cell.value for cell in next(rows)]
+        
+        # set columns name in lower case because field name allways must to be lowercase
+        dataset.headers = [str(cell.value).lower() for cell in next(rows)]
 
         for row in rows:
             row_values = [cell.value for cell in row]
