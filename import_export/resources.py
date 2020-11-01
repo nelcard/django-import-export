@@ -745,8 +745,10 @@ class ModelDeclarativeMetaclass(DeclarativeMetaclass):
                 if f.name in declared_fields:
                     continue
 
+                # readonly for primary key for not allow insert
+                # new pks in Sofisis. Because create error with sequence
                 field = new_class.field_from_django_field(f.name, f,
-                                                          readonly=False)
+                                                          readonly=f.primary_key)
                 field_list.append((f.name, field, ))
 
             new_class.fields.update(OrderedDict(field_list))
