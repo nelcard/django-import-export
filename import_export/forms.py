@@ -11,8 +11,8 @@ class ImportForm(forms.Form):
         )
     input_format = forms.ChoiceField(
         label=_('Format'),
-        choices=(),
-        )
+         choices=(),
+         )
 
     def __init__(self, import_formats, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -24,6 +24,12 @@ class ImportForm(forms.Form):
 
         self.fields['input_format'].choices = choices
 
+class ImportFormNoInputFormat(forms.Form):
+    import_file = forms.FileField(
+        label=_('File to import')
+        )
+    def __init__(self, import_formats, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 class ConfirmImportForm(forms.Form):
     import_file_name = forms.CharField(widget=forms.HiddenInput())
@@ -35,6 +41,14 @@ class ConfirmImportForm(forms.Form):
         data = os.path.basename(data)
         return data
 
+class ConfirmImportFormNoInputFormat(forms.Form):
+    import_file_name = forms.CharField(widget=forms.HiddenInput())
+    original_file_name = forms.CharField(widget=forms.HiddenInput())
+
+    def clean_import_file_name(self):
+        data = self.cleaned_data['import_file_name']
+        data = os.path.basename(data)
+        return data
 
 class ExportForm(forms.Form):
     file_format = forms.ChoiceField(

@@ -8,7 +8,7 @@ from django.contrib import admin, messages
 from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
 from django.contrib.auth import get_permission_codename
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponse, HttpResponseRedirect, HttpResponseForbidden
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -18,12 +18,15 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
+
 from .formats.base_formats import DEFAULT_FORMATS
-from .forms import ConfirmImportForm, ExportForm, ImportForm, export_action_form_factory
+from .forms import ConfirmImportForm, ExportForm, ImportForm, export_action_form_factory, ImportFormNoInputFormat, \
+    ConfirmImportFormNoInputFormat
 from .resources import modelresource_factory
 from .results import RowResult
 from .signals import post_export, post_import
 from .tmp_storages import TempFolderStorage
+
 
 SKIP_ADMIN_LOG = getattr(settings, 'IMPORT_EXPORT_SKIP_ADMIN_LOG', False)
 TMP_STORAGE_CLASS = getattr(settings, 'IMPORT_EXPORT_TMP_STORAGE_CLASS',
@@ -125,6 +128,28 @@ class ImportMixin(ImportExportMixinBase):
         """
         return [f for f in self.formats if f().can_import()]
 
+    def check_import_file_format(self, filename: str):
+
+        format = filename[filename.lower().find('.'):]
+        file_format = ''
+
+        if format.endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
+            file_format = 'jpeg'
+        elif format.endswith(('.xml')):
+            file_format = 'xml'
+        elif format.endswith(('.xlsx')):
+            file_format = 'xlsx'
+        elif format.endswith(('.csv')):
+            file_format = 'csv'
+
+        import_formats = self.get_import_formats()
+
+        for import_format in import_formats:
+            if file_format == import_format().get_title():
+                return import_format()
+        raise ValidationError(_(f'File format {filename} not valid'))
+
+
     @method_decorator(require_POST)
     def process_import(self, request, *args, **kwargs):
         """
@@ -137,9 +162,10 @@ class ImportMixin(ImportExportMixinBase):
         confirm_form = form_type(request.POST)
         if confirm_form.is_valid():
             import_formats = self.get_import_formats()
-            input_format = import_formats[
-                int(confirm_form.cleaned_data['input_format'])
-            ]()
+            input_format = self.check_import_file_format(confirm_form.cleaned_data['original_file_name'])
+            # input_format = import_formats[
+            #      int(confirm_form.cleaned_data['input_format'])
+            #  ]()
             tmp_storage = self.get_tmp_storage_class()(name=confirm_form.cleaned_data['import_file_name'])
             data = tmp_storage.read(input_format.get_read_mode())
             if not input_format.is_binary() and self.from_encoding:
@@ -215,13 +241,16 @@ class ImportMixin(ImportExportMixinBase):
         """
         Get the form type used to read the import format and file.
         """
-        return ImportForm
+        return ImportFormNoInputFormat
+        # return ImportForm
 
     def get_confirm_import_form(self):
         """
         Get the form type (class) used to confirm the import.
         """
-        return ConfirmImportForm
+        return ConfirmImportFormNoInputFormat
+        # return ConfirmImportForm
+
 
     def get_form_kwargs(self, form, *args, **kwargs):
         """
@@ -271,7 +300,7 @@ class ImportMixin(ImportExportMixinBase):
         # try:
         data = tmp_storage.read(input_format.get_read_mode())
         if not input_format.is_binary() and self.from_encoding:
-            data = force_text(data, self.from_encoding)
+             data = force_text(data, self.from_encoding)
         dataset = input_format.create_dataset(data)
         # except UnicodeDecodeError as e:
         #     return HttpResponse(_(u"<h1>Imported file has a wrong encoding: %s</h1>" % e))
@@ -294,10 +323,14 @@ class ImportMixin(ImportExportMixinBase):
         context['result'] = result
 
         if not result.has_errors() and not result.has_validation_errors():
+            # initial = {
+            #     'import_file_name': tmp_storage.name,
+            #     'original_file_name': import_file.name,
+            #     #'input_format': form.cleaned_data['input_format'],
+            # }
             initial = {
                 'import_file_name': tmp_storage.name,
                 'original_file_name': import_file.name,
-                'input_format': form.cleaned_data['input_format'],
             }
             confirm_form = self.get_confirm_import_form()
             initial = self.get_form_kwargs(form=form, **initial)
@@ -333,12 +366,15 @@ class ImportMixin(ImportExportMixinBase):
         request.current_app = self.admin_site.name
 
         if request.POST and form.is_valid():
-            input_format = self.get_import_formats()[
-                int(form.cleaned_data['input_format'])
-            ]()
-
+            input_format = self.check_import_file_format(form.cleaned_data['import_file'].file_name)
+            # input_format = self.get_import_formats()[
+            #      int(form.cleaned_data['input_format'])
+            #  ]()
             try:
-                return self._run_import_action(request, context, form, input_format, *args, **kwargs)
+                if hasattr(input_format, 'run_input_format'):
+                    return input_format.run_input_format(self, request, context, form, *args, **kwargs)
+                else:
+                    return self._run_import_action(request, context, form, input_format, *args, **kwargs)
             except forms.ValidationError as e:
                 messages.error(request, str(e))
 
